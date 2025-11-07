@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一桁足し算（音声出題）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#facc15',
+                        'accent': '#10b981',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* カスタムスタイル */
+        body {
+            background-color: #f0f4f8; /* Light background */
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            min-height: 100vh;
+        }
+        .container-card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            /* コンテンツが小さくなったときに、カード自体も柔軟に縮小できるように flex-shrink を適用 */
+            flex-shrink: 1;
+            /* min-width: 280px; の制約を削除し、より柔軟な縮小を可能にします */
+        }
+        .number-button {
+            transition: transform 0.1s;
+        }
+        .number-button:active {
+            transform: scale(0.95);
+        }
+        .message-box {
+            /* 最小高さをさらに削減し、柔軟に縮小できるように min-h-0 を指定 */
+            min-height: 2rem; /* 32px */
+        }
+        /* キーボード入力用のカーソル点滅アニメーション */
+        .cursor-blink {
+            animation: blink-caret .75s step-end infinite;
+        }
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: #4f46e5; }
+        }
+
+        /* 画面が小さい時に全体を中央に寄せ、スクロール可能にするためのラッパー調整 */
+        .page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center; /* 垂直方向中央寄せ */
+            justify-content: center; /* 水平方向中央寄せ */
+            padding: 0.5rem; /* 全体のパディングも p-2 (0.5rem) に削減 */
+        }
+        
+        /* フォントサイズをより柔軟に、小さく設定 */
+        .app-title {
+             font-size: 1.25rem; /* text-xl */
+        }
+        @media (min-width: 640px) {
+            .app-title {
+                font-size: 1.5rem; /* sm:text-2xl */
+            }
+        }
+        .problem-text {
+            font-size: 2rem; /* text-3xl */
+            margin-bottom: 0.5rem; /* mb-2 */
+            min-height: 2rem; /* テキストがない時もレイアウトが崩れないように最小高さを設定 */
+        }
+        @media (min-width: 640px) {
+            .problem-text {
+                font-size: 2.5rem; /* sm:text-4xl */
+            }
+        }
+    </style>
+</head>
+<body class="bg-f0f4f8">
+    
+    <!-- 全体をラップし、常に中央に表示するように調整 -->
+    <div class="page-wrapper">
+        <!-- max-w-lg -> max-w-xs (320px) に大幅に削減。 p-4 -> p-3 に削減 -->
+        <div id="app" class="container-card w-full max-w-xs p-3 bg-white rounded-xl shadow-2xl">
+            <!-- タイトル: ご要望に合わせて変更 -->
+            <h1 class="app-title font-bold text-center text-primary mb-2">
+                足し算チャレンジ
+            </h1>
+            
+            <!-- 問題表示エリア -->
+            <div class="bg-indigo-100 p-3 rounded-lg mb-2 text-center shadow-inner">
+                <!-- カスタムクラス problem-text を適用し、フォントサイズをより柔軟に -->
+                <p id="question-text" class="problem-text font-extrabold text-gray-800 select-none">
+                    <!-- JSによって問題が表示されます -->
+                </p>
+                <!-- 入力表示: text-2xl/sm:text-3xl に縮小。py-1 に削減 -->
+                <div id="input-display" class="text-2xl sm:text-3xl font-mono text-primary bg-white px-3 py-1 rounded-lg inline-block border-b-4 border-primary cursor-blink">
+                    <span id="current-input"></span><span id="cursor">_</span>
+                </div>
+                
+            </div>
+
+            <!-- コントロールボタン -->
+            <div class="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 mb-2">
+                <button id="speak-button" class="flex items-center justify-center px-3 py-2 bg-accent text-white text-xs sm:text-sm font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition disabled:opacity-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9c2.203 2.204 3.305 5.093 3.305 7.979 0 2.885-1.102 5.775-3.305 7.979M6.464 8.464a5 5 5 0 000 7.072m-2.828-9.9c-2.203 2.204-3.305 5.093-3.305 7.979 0 2.885 1.102 5.775 3.305 7.979" />
+                    </svg>
+                    もう一度聞く
+                </button>
+                <button id="new-problem-button" class="px-3 py-2 bg-primary text-white text-xs sm:text-sm font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:opacity-50">
+                    新しい問題
+                </button>
+            </div>
+            
+            <!-- メッセージ/フィードバックエリア -->
+            <div id="message-area" class="message-box text-center mb-2 p-2 rounded-lg text-sm font-bold">
+                さあ、新しい問題を始めましょう！
+            </div>
+
+            <!-- 音声入力ボタン (Web Speech APIを使用) -->
+            <div class="flex justify-center mb-2">
+                 <button id="voice-input-button" class="flex items-center px-3 sm:px-4 py-2 bg-secondary text-gray-900 text-sm font-bold rounded-xl shadow-lg hover:bg-yellow-400 transition disabled:opacity-50">
+                    <svg id="mic-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a4 4 0 00-4 4v2a4 4 0 004 4m0-12V5a2 2 0 012-2h4a2 2 0 012 2v2m-6 4a2 2 0 100-4 2 2 0 000 4z" />
+                    </svg>
+                    <span id="voice-input-text">音声で回答する (お試し)</span>
+                </button>
+            </div>
+
+
+            <!-- タッチパネル（数字ボタン） - 均等な3x4レイアウト -->
+            <div id="number-pad" class="grid grid-cols-3 gap-1">
+                <!-- 1から9のボタン -->
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="7">7</button>
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="8">8</button>
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="9">9</button>
+                
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="4">4</button>
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="5">5</button>
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="6">6</button>
+
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="1">1</button>
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="2">2</button>
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="3">3</button>
+
+                <!-- 0と消去ボタン -->
+                <button class="number-button bg-red-100 text-red-600 text-xl sm:text-2xl font-bold py-2 rounded-xl border-b-4 border-red-400 shadow-md hover:bg-red-200" data-action="clear">
+                    消す
+                </button>
+                <button class="number-button bg-white text-primary text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-primary shadow-md hover:bg-indigo-50" data-value="0">0</button>
+                <button class="number-button bg-accent text-white text-2xl sm:text-3xl font-bold py-2 rounded-xl border-b-4 border-emerald-600 shadow-md hover:bg-emerald-600" data-action="submit">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firestoreのログレベルをデバッグに設定
+        setLogLevel('Debug');
+
+        // グローバル変数の定義 (Canvas環境から供給される変数を使用)
+        // GitHub Pagesではこれらの変数はundefinedになり、フォールバックを使用します。
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        // 修正: 初期化前の自身を参照しないように、グローバル変数 `__initial_auth_token` を参照するように修正しました。
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+
+        let app, db, auth;
+        let userId = 'anonymous';
+        // ローカルTTSで使用する音声オブジェクト
+        let japaneseVoice = null; 
+
+        // 外部API依存のコード（fetchTTSなど）を削除し、ローカルTTSに統一します。
+
+        // =========================================================================
+        // アプリケーション ロジック
+        // =========================================================================
+
+        let currentProblem = {
+            num1: 0,
+            num2: 0,
+            correctAnswer: 0
+        };
+        let currentInput = "";
+        let isProblemActive = false;
+        let isSpeaking = false;
+        
+        const questionTextEl = document.getElementById('question-text');
+        const currentInputEl = document.getElementById('current-input');
+        const messageAreaEl = document.getElementById('message-area');
+        const newProblemButton = document.getElementById('new-problem-button');
+        const speakButton = document.getElementById('speak-button');
+        const voiceInputButton = document.getElementById('voice-input-button');
+        const numberPad = document.getElementById('number-pad');
+        const cursorEl = document.getElementById('cursor');
+
+        /**
+         * ローカルTTSを使用して指定されたテキストを読み上げる (非同期)
+         * この関数は、問題出題やフィードバックなど、isSpeakingフラグを管理する主体の音声に使用されます。
+         * @param {string} text - 読み上げるテキスト
+         * @param {number} rate - 読み上げ速度 (デフォルト1.0)
+         */
+        function speakLocally(text, rate = 1.0) {
+            return new Promise((resolve) => {
+                if (!('speechSynthesis' in window)) {
+                    console.warn("Local TTS not supported.");
+                    resolve();
+                    return;
+                }
+                
+                // 現在の読み上げをキャンセル
+                if (window.speechSynthesis.speaking) {
+                    window.speechSynthesis.cancel();
+                }
+
+                isSpeaking = true;
+                updateUI();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ja-JP';
+                utterance.rate = rate;
+                if (japaneseVoice) {
+                    utterance.voice = japaneseVoice;
+                }
+
+                utterance.onend = () => {
+                    isSpeaking = false;
+                    updateUI();
+                    resolve();
+                };
+                utterance.onerror = (e) => {
+                    console.error("Local TTS Error:", e);
+                    isSpeaking = false;
+                    updateUI();
+                    resolve();
+                };
+
+                window.speechSynthesis.speak(utterance);
+            });
+        }
+
+        /**
+         * ローカルTTSを使用して数字を一瞬読み上げる（動作速度改善のため）
+         * この関数は、入力時の即時フィードバックに特化しており、isSpeakingフラグには影響を与えません。
+         * @param {string} digit - 読み上げる数字
+         */
+        function speakDigit(digit) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(digit);
+                utterance.lang = 'ja-JP';
+                if (japaneseVoice) {
+                    utterance.voice = japaneseVoice;
+                }
+                // 読み上げ速度を1.8から1.3に調整し、発音を明瞭化
+                utterance.rate = 1.3; 
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // UIの状態更新
+        function updateUI() {
+            // isSpeakingがtrueの場合はすべての操作を無効化する
+            const disableAllControls = isSpeaking;
+
+            if (isProblemActive) {
+                // 問題がアクティブな場合は式を表示
+                questionTextEl.textContent = `${currentProblem.num1} + ${currentProblem.num2} = ?`;
+            } else {
+                 // 問題が非アクティブな場合はテキストをクリア（ご要望により「次の問題へGO!」を削除）
+                questionTextEl.textContent = ""; 
+            }
+            
+            // 入力表示を更新
+            currentInputEl.textContent = currentInput;
+            cursorEl.style.display = currentInput.length === 0 ? 'inline' : 'none'; // 入力がないときだけカーソルを表示
+
+            // ボタンの状態を更新
+            newProblemButton.disabled = disableAllControls;
+            // 問題が非アクティブな時は問題を再度聞くボタンを無効にする
+            speakButton.disabled = disableAllControls || !isProblemActive; 
+            voiceInputButton.disabled = disableAllControls || !isProblemActive;
+            
+            // 数字パッドのボタンも無効化 (処理中は入力を受け付けない)
+            numberPad.querySelectorAll('button').forEach(button => {
+                button.disabled = disableAllControls;
+            });
+        }
+
+        // メッセージ表示と色変更
+        function showMessage(text, type = 'info') {
+            messageAreaEl.textContent = text;
+            // mb-3 -> mb-2 に変更。 text-base/sm:text-lg -> text-sm に縮小
+            messageAreaEl.className = 'message-box text-center mb-2 p-2 rounded-lg text-sm font-bold';
+            
+            switch (type) {
+                case 'success':
+                    messageAreaEl.classList.add('bg-green-100', 'text-green-700');
+                    break;
+                case 'error':
+                    messageAreaEl.classList.add('bg-red-100', 'text-red-700');
+                    break;
+                case 'info':
+                default:
+                    messageAreaEl.classList.add('bg-blue-100', 'text-blue-700');
+                    break;
+            }
+        }
+
+        /**
+         * 問題の生成（1～9の数字の足し算、繰り上がりなし）
+         */
+        function generateProblem() {
+            if (isSpeaking) return; // 音声再生中は開始させない
+            
+            // num1: 1から8のランダムな数。num2が最低1のため、num1が9だと繰り上がりになってしまうのを防ぐ
+            const num1 = Math.floor(Math.random() * 8) + 1; 
+            
+            // num2: 1から (9 - num1) のランダムな数。合計が9以下になることを保証
+            const maxNum2 = 9 - num1;
+            const num2 = Math.floor(Math.random() * maxNum2) + 1; 
+            
+            currentProblem = {
+                num1: num1,
+                num2: num2,
+                correctAnswer: num1 + num2
+            };
+            currentInput = "";
+            isProblemActive = true;
+            showMessage(`問題: ${num1} + ${num2} = ?`, 'info');
+            updateUI();
+            readQuestion(num1, num2);
+        }
+
+        // 音声で問題を読み上げる (ローカルTTS化)
+        async function readQuestion(n1, n2) {
+            if (isSpeaking) return;
+
+            showMessage('問題を読み上げています...', 'info');
+
+            const textToSpeak = `${n1}たす${n2}はいくらですか？`;
+            
+            // API呼び出しをローカルTTSに置き換え
+            await speakLocally(textToSpeak); 
+            
+            // 読み上げ終了後にUIを更新
+            showMessage(`問題: ${n1} + ${n2} = ?`, 'info');
+            updateUI();
+        }
+
+        // 入力処理 (数字とキーボードのEnter)
+        function handleInput(value) {
+            if (!isProblemActive || isSpeaking) return;
+            
+            if (value === 'clear') {
+                currentInput = "";
+            } else if (value === 'submit') {
+                checkAnswer();
+                return;
+            } else if (value >= '0' && value <= '9') {
+                // 答えは最大9なので、1桁のみ許容する
+                if (currentInput.length < 1) { 
+                    currentInput += value;
+                    speakDigit(value); // 入力数字のローカル読み上げ
+                }
+            }
+            updateUI();
+        }
+
+        // 回答チェック (ローカルTTS化)
+        async function checkAnswer(answerOverride = null) {
+            if (!isProblemActive || isSpeaking) return;
+
+            const userAnswer = answerOverride !== null ? parseInt(answerOverride, 10) : parseInt(currentInput, 10);
+            
+            if (isNaN(userAnswer)) {
+                showMessage("数字を入力してください。", 'error');
+                return;
+            }
+            
+            if (userAnswer === currentProblem.correctAnswer) {
+                showMessage("せいかい！よくできました！🎉", 'success');
+                isProblemActive = false;
+                currentInput = currentProblem.correctAnswer.toString(); // 正しい答えを表示
+                updateUI();
+                
+                // 正解を音声でフィードバック (ローカルTTS)
+                await speakLocally("正解です！よくできました。");
+
+            } else {
+                showMessage("ざんねん、ちがいます。もう一度がんばってね。", 'error');
+                currentInput = "";
+                updateUI();
+                
+                // 不正解を音声でフィードバック (ローカルTTS)
+                await speakLocally("ブッブー、残念。もう一度考えてみましょう。");
+            }
+        }
+
+        // =========================================================================
+        // イベントリスナー
+        // =========================================================================
+
+        // 数字パッドのクリックイベント
+        numberPad.querySelectorAll('button').forEach(button => {
+            button.addEventListener('click', () => {
+                const value = button.getAttribute('data-value');
+                const action = button.getAttribute('data-action');
+                handleInput(value || action);
+            });
+        });
+
+        // キーボード入力イベント
+        document.addEventListener('keydown', (e) => {
+            if (e.key >= '0' && e.key <= '9') {
+                e.preventDefault();
+                handleInput(e.key);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                checkAnswer();
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                e.preventDefault();
+                currentInput = currentInput.slice(0, -1);
+                updateUI();
+            }
+        });
+
+        // 新しい問題ボタン
+        newProblemButton.addEventListener('click', generateProblem);
+        
+        // もう一度聞くボタン
+        speakButton.addEventListener('click', () => {
+            if (isProblemActive) {
+                readQuestion(currentProblem.num1, currentProblem.num2);
+            }
+        });
+        
+        // =========================================================================
+        // 音声入力（STT）処理
+        // =========================================================================
+
+        let recognition = null;
+        let isListening = false;
+        const micIcon = document.getElementById('mic-icon');
+        const voiceInputTextEl = document.getElementById('voice-input-text');
+
+        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ja-JP'; // 日本語を設定
+            recognition.interimResults = false; // 最終結果のみ返す
+            recognition.maxAlternatives = 1; // 候補は一つだけ
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                
+                // 数字を抽出
+                const numberMatch = transcript.match(/\d+/);
+                const number = numberMatch ? numberMatch[0] : null;
+
+                // 日本語の数詞を数字に変換する簡易処理（例: 'ご' -> '5'）
+                const japaneseNumberMap = {
+                    'ぜろ': '0', 'れい': '0', 'いち': '1', 'に': '2', 'さん': '3', 
+                    'よん': '4', 'ご': '5', 'ろく': '6', 'なな': '7', 'はち': '8', 'きゅう': '9', 
+                };
+                let finalAnswer = number;
+                
+                // 数字がない場合、日本語の数詞から探す
+                if (!finalAnswer) {
+                    for (const [word, digit] of Object.entries(japaneseNumberMap)) {
+                        // 転記されたテキストに数詞が含まれているか確認
+                        if (transcript.includes(word)) {
+                            finalAnswer = digit;
+                            break;
+                        }
+                    }
+                }
+                
+                // 繰り上がりなしのため、回答が1桁であることを確認（念のため9以下かチェック）
+                if (finalAnswer && finalAnswer.length === 1 && parseInt(finalAnswer, 10) > 0 && parseInt(finalAnswer, 10) <= 9) {
+                    showMessage(`音声入力: ${finalAnswer}`, 'info');
+                    currentInput = finalAnswer;
+                    updateUI();
+                    checkAnswer();
+                } else {
+                    showMessage("回答が聞き取れませんでした。1桁の数字（1〜9）をはっきりと発音してください。", 'error');
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("音声認識エラー:", event.error);
+                if (event.error !== 'no-speech') {
+                    showMessage(`音声認識エラー: ${event.error}`, 'error');
+                }
+                isListening = false;
+                micIcon.classList.remove('animate-pulse', 'text-yellow-600');
+                micIcon.classList.add('text-red-600');
+                voiceInputTextEl.textContent = "音声で回答する (お試し)";
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                micIcon.classList.remove('animate-pulse', 'text-yellow-600');
+                micIcon.classList.add('text-red-600');
+                voiceInputTextEl.textContent = "音声で回答する (お試し)";
+            };
+
+            voiceInputButton.addEventListener('click', () => {
+                if (!isProblemActive || isSpeaking) return;
+                
+                if (isListening) {
+                    recognition.stop();
+                    isListening = false;
+                } else {
+                    try {
+                        recognition.start();
+                        isListening = true;
+                        showMessage("マイクに向かって回答を言ってください。", 'info');
+                        micIcon.classList.add('animate-pulse', 'text-yellow-600');
+                        micIcon.classList.remove('text-red-600');
+                        voiceInputTextEl.textContent = "録音中... クリックで停止";
+                    } catch (e) {
+                        showMessage("音声入力の開始に失敗しました。ブラウザの許可を確認してください。", 'error');
+                        console.error("Recognition start failed:", e);
+                    }
+                }
+            });
+        } else {
+            // Web Speech APIがサポートされていない場合の処理
+            voiceInputButton.disabled = true;
+            voiceInputTextEl.textContent = "音声入力は非対応です";
+            console.warn("Web Speech API is not supported in this browser/environment.");
+        }
+
+
+        // =========================================================================
+        // 初期化処理
+        // =========================================================================
+        window.onload = async function() {
+            try {
+                // 1. Firebase初期化 (GitHub公開時はフォールバック動作となります)
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+
+                    // 2. 認証
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    userId = auth.currentUser?.uid || crypto.randomUUID();
+                    
+                    // 3. ユーザーデータをFirestoreに記録 (オプション)
+                    await setDoc(doc(db, `/artifacts/${appId}/users/${userId}/metadata/profile`), { 
+                        last_login: new Date().toISOString(),
+                        app_name: "AdditionApp"
+                    }, { merge: true });
+                    
+                    console.log("Firebase initialized. User ID:", userId);
+
+                } else {
+                    console.warn("Firebase config missing. Running without persistent storage.");
+                }
+
+                // 4. ローカルTTSの準備 (音声合成オブジェクトの準備)
+                if ('speechSynthesis' in window) {
+                    const updateVoices = () => {
+                        const voices = window.speechSynthesis.getVoices();
+                        // 日本語の声を検索
+                        japaneseVoice = voices.find(voice => voice.lang === 'ja-JP');
+                        if (!japaneseVoice && voices.length > 0) {
+                            // 日本語がなければ最初の声を使用 (フォールバック)
+                            japaneseVoice = voices[0];
+                        }
+                        if (window.speechSynthesis.onvoiceschanged) {
+                            // イベントハンドラを一度削除して再登録
+                            window.speechSynthesis.onvoiceschanged = null;
+                        }
+                    };
+
+                    // Chrome/Firefoxではvoiceschangedイベントを待つ必要がある
+                    updateVoices(); 
+                    window.speechSynthesis.onvoiceschanged = updateVoices;
+                }
+                
+                // 5. アプリケーションの開始
+                // 自動再生エラー回避のため、初回起動時は問題を生成せず、ユーザーのボタンクリックを待つ
+                isProblemActive = false; 
+                currentInput = "";
+                showMessage("「新しい問題」ボタンを押して、学習を始めましょう！", 'info');
+                updateUI(); 
+
+            } catch (error) {
+                console.error("Initialization Error:", error);
+                showMessage("初期化中にエラーが発生しました。", 'error');
+            }
+        };
+
+        
+    </script>
+</body>
+</html>
